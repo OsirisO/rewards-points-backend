@@ -1,5 +1,5 @@
 const getTotalPoints = (transactions) => {
-  totalPoints = 0;
+  let totalPoints = 0;
   transactions.forEach((transaction) => (totalPoints += transaction.points));
   return totalPoints;
 };

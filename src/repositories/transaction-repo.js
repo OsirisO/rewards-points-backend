@@ -7,6 +7,7 @@ const addTransaction = (payer, points, timestamp) => {
     id: new Date().getTime(),
     payer: payer,
     points: points,
+    initialPoints: points,
     timestamp: timestamp,
   };
 

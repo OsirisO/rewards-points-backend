@@ -49,8 +49,11 @@ const addTransaction = (req, res) => {
     }
   }
 
+  // Not sure if negative transactions should be saved
+  TransactionsRepository.addTransaction(payer, points, timestamp);
+
   if (pointsToSubstract > 0) {
-    res.send(
+    return res.send(
       `There were ${pointsToSubstract} points that were not 
       substracted because there was not enought balance from payer`
     );
@@ -75,7 +78,11 @@ const spendPoints = (req, res) => {
 
   const totalPoints = Utils.getTotalPoints(transactions);
   if (points > totalPoints) {
-    return `Not enough points to spend, your current balance is ${totalPoints} points`;
+    return res
+      .status(400)
+      .send(
+        `Not enough points to spend, your current balance is ${totalPoints} points`
+      );
   }
 
   let pointsToSpend = points;
@@ -89,18 +96,16 @@ const spendPoints = (req, res) => {
     }
     if (pointsToSpend >= transaction.points) {
       pointsToSpend -= transaction.points;
-      const updatedTransaction = {
+      updatedTransactions.push({
         payer: transaction.payer,
         points: transaction.points * -1,
-      };
-      updatedTransactions.push(updatedTransaction);
+      });
       TransactionsRepository.updatePoints(transaction.id, 0);
     } else {
-      const updatedTransaction = {
+      updatedTransactions.push({
         payer: transaction.payer,
         points: pointsToSpend * -1,
-      };
-      updatedTransactions.push(updatedTransaction);
+      });
       TransactionsRepository.updatePoints(
         transaction.id,
         transaction.points - pointsToSpend
@@ -113,15 +118,19 @@ const spendPoints = (req, res) => {
 };
 
 const getBalance = (req, res) => {
-  const balance = {};
-
+  const balancePerPayer = {};
   const transactions = TransactionsRepository.getTransactions();
+  transactions.forEach(
+    (transaction) => (balancePerPayer[transaction.payer] = 0)
+  );
 
   transactions.forEach((transaction) => {
-    balance[transaction.payer] = transaction.points;
+    if (transaction.points > 0) {
+      balancePerPayer[transaction.payer] += transaction.points;
+    }
   });
 
-  res.json(balance);
+  res.json(balancePerPayer);
 };
 
 module.exports = {
