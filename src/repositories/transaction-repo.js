@@ -32,6 +32,7 @@ const addTransaction = (payer, points, timestamp) => {
 
   TRANSACTIONS.push(transaction);
 };
+
 const listTransactions = () => {
   return TRANSACTIONS;
 };
