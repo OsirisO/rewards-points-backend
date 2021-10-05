@@ -1,6 +1,7 @@
 const Utils = require("../utils");
 
 const TRANSACTIONS = [];
+const BALANCES = {};
 
 const addTransaction = (payer, points, timestamp) => {
   const transaction = {
@@ -10,6 +11,9 @@ const addTransaction = (payer, points, timestamp) => {
     initialPoints: points,
     timestamp: timestamp,
   };
+
+  // Add or substract points to the users' balance
+  updateBalance(payer, points);
 
   TRANSACTIONS.push(transaction);
 };
@@ -27,8 +31,29 @@ const updatePoints = (transactionId, updatedPoints) => {
   }
 };
 
+const updateBalance = (payer, points) => {
+  if (!BALANCES.hasOwnProperty(payer)) {
+    BALANCES[payer] = 0;
+  }
+
+  BALANCES[payer] += points;
+
+  if (BALANCES[payer] < 0) {
+    // Negative balances are not allowed
+    BALANCES[payer] = 0;
+  }
+
+  return;
+};
+
+const getBalance = () => {
+  return BALANCES;
+};
+
 module.exports = {
   addTransaction,
   getTransactions,
   updatePoints,
+  updateBalance,
+  getBalance,
 };

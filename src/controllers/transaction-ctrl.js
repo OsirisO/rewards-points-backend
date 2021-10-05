@@ -25,37 +25,36 @@ const addTransaction = (req, res) => {
   }
 
   // If transaction comes with negative points,
-  // substract from the oldest transaction with the provided payer
+  // substract from the oldest transaction with the matching payer
 
   const transactions = TransactionsRepository.getTransactions();
-  let pointsToSubstract = Math.abs(points);
 
-  for (let i = 0; i < transactions.length && pointsToSubstract > 0; i++) {
+  let remainingPoints = Math.abs(points);
+
+  for (let i = 0; i < transactions.length && remainingPoints > 0; i++) {
     const transaction = transactions[i];
+    let pointsToSubstract = Math.min(transaction.points, remainingPoints);
 
-    if (transaction.payer !== payer) {
+    // When payer don't match or transaction points are negative or zero, skip it
+    if (transaction.payer !== payer || transaction.points <= 0) {
       continue;
     }
 
-    if (pointsToSubstract >= transaction.points) {
-      pointsToSubstract -= transaction.points;
-      TransactionsRepository.updatePoints(transaction.id, 0);
-    } else {
-      TransactionsRepository.updatePoints(
-        transaction.id,
-        transaction.points - pointsToSubstract
-      );
-      pointsToSubstract = 0;
-    }
+    // Update points in existing transaction
+    const updatedPoints = transaction.points - pointsToSubstract;
+    TransactionsRepository.updatePoints(transaction.id, updatedPoints);
+    remainingPoints -= pointsToSubstract;
   }
 
   // Not sure if negative transactions should be saved
   TransactionsRepository.addTransaction(payer, points, timestamp);
 
-  if (pointsToSubstract > 0) {
+  // Edge case for when incoming transaction comes with negative points and there were not
+  // enough points in existing transactions for the given payer
+  if (remainingPoints > 0) {
     return res.send(
-      `There were ${pointsToSubstract} points that were not 
-      substracted because there was not enought balance from payer`
+      `There were ${remainingPoints} points that were not 
+      substracted because there was not enough balance from payer`
     );
   }
 
@@ -68,7 +67,7 @@ const listTransactions = (req, res) => {
 };
 
 const spendPoints = (req, res) => {
-  const points = req.body.points;
+  let points = req.body.points;
 
   if (!points) {
     return res.status(400).send("Missing required field 'points'.");
@@ -85,51 +84,45 @@ const spendPoints = (req, res) => {
       );
   }
 
-  let pointsToSpend = points;
-  let updatedTransactions = [];
+  // The response will be an array of all spent points from each transaction
+  const response = [];
 
-  for (let i = 0; i < transactions.length && pointsToSpend > 0; i++) {
+  for (let i = 0; i < transactions.length && points > 0; i++) {
     const transaction = transactions[i];
 
+    // If transaction points are negative, skip it
     if (transaction.points < 0) {
       continue;
     }
-    if (pointsToSpend >= transaction.points) {
-      pointsToSpend -= transaction.points;
-      updatedTransactions.push({
-        payer: transaction.payer,
-        points: transaction.points * -1,
-      });
-      TransactionsRepository.updatePoints(transaction.id, 0);
-    } else {
-      updatedTransactions.push({
-        payer: transaction.payer,
-        points: pointsToSpend * -1,
-      });
-      TransactionsRepository.updatePoints(
-        transaction.id,
-        transaction.points - pointsToSpend
-      );
-      pointsToSpend = 0;
-    }
+
+    // The amount of points to substract from this transaction
+    // should be the minimum number between points
+    // and the transaction points; and update incoming points
+    const pointsToSubstract = Math.min(points, transaction.points);
+    points -= pointsToSubstract;
+
+    // Update the transaction to remove the points
+    const updatedPoints = transaction.points - pointsToSubstract;
+    TransactionsRepository.updatePoints(transaction.id, updatedPoints);
+
+    // Add the substracted points to the response array
+    response.push({
+      payer: transaction.payer,
+      points: pointsToSubstract * -1,
+    });
+
+    // Update the payer balance
+    TransactionsRepository.updateBalance(
+      transaction.payer,
+      pointsToSubstract * -1
+    );
   }
 
-  res.json(updatedTransactions);
+  res.json(response);
 };
 
 const getBalance = (req, res) => {
-  const balancePerPayer = {};
-  const transactions = TransactionsRepository.getTransactions();
-  transactions.forEach(
-    (transaction) => (balancePerPayer[transaction.payer] = 0)
-  );
-
-  transactions.forEach((transaction) => {
-    if (transaction.points > 0) {
-      balancePerPayer[transaction.payer] += transaction.points;
-    }
-  });
-
+  const balancePerPayer = TransactionsRepository.getBalance();
   res.json(balancePerPayer);
 };
 
